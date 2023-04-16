@@ -20,14 +20,15 @@ class PermissionManager(private val ctx: Context, private val activity: Componen
             }
         }
 
-    fun requestPermission(permission: String) {
+    fun requestPermission(permission: String, action: String) {
         when {
             ContextCompat.checkSelfPermission(
                 ctx,
                 permission
             ) == PackageManager.PERMISSION_GRANTED -> {
-                Log.i("PERMISSION:", "PackageManger - granted")
-                activity.startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                Log.i("PERMISSION:", "PermissionManger - granted")
+                activity.startActivity(Intent(action))
+//                activity.startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
                 // You can use the API that requires the permission.
             }
             ActivityCompat.shouldShowRequestPermissionRationale(activity, permission) -> {

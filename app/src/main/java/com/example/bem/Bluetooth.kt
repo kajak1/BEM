@@ -17,17 +17,30 @@ class Bluetooth(ctx: Context, val permissionManager: PermissionManager) {
     val isBluetoothEnabled: Boolean
         get() = bluetoothAdapter?.isEnabled == true
 
-    fun getAvailableDevices(): List<Device> {
+    fun searchForDevices() {
+        try {
+            if (bluetoothAdapter == null) {
+                Log.i("NIE MA", "nie ma adaptera")
+            } else {
+                Log.i("JEST", "jest adapter")
+
+            }
+            bluetoothAdapter?.startDiscovery()
+        } catch (e: SecurityException) {
+            Log.i("EXCEPTION: ","no DISCOVERY permission")
+        }
+    }
+    fun getPairedDevices(): List<Device> {
         try {
             val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter?.bondedDevices
 
             val mappedDevices = pairedDevices?.map<BluetoothDevice, Device> { device ->
-                Device(device.name)
+                Device(device.name, device.address)
 //                val deviceHardwareAddress = device.address // MAC address
             } ?: emptyList()
 
             if (mappedDevices.isEmpty()) {
-                return listOf(Device("default device"))
+                return listOf(Device("default device", "default MAC"))
             }
 
             return mappedDevices
@@ -35,7 +48,7 @@ class Bluetooth(ctx: Context, val permissionManager: PermissionManager) {
         } catch (e: SecurityException) {
             Log.i("EXCEPTION: ","no CONNECT permission")
 
-            return listOf(Device("expection device"))
+            return listOf(Device("exception device", "exception MAC"))
         }
     }
 }
