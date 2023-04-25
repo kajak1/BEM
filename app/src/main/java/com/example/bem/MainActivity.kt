@@ -2,7 +2,6 @@ package com.example.bem
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
-//import androidx.lifecycle.viewmodel.compose.viewModel
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -13,7 +12,6 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,30 +25,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.bem.ui.theme.BEMTheme
 
-@RequiresApi(Build.VERSION_CODES.M)
 class MainActivity : ComponentActivity() {
     private val permissionManager: PermissionManager by lazy {
         PermissionManager(applicationContext, this)
     }
+
     private val bth: Bluetooth by lazy {
-        Bluetooth(applicationContext, permissionManager)
-    }
-    private val bthViewModel: BluetoothViewModel by lazy {
-        BluetoothViewModel(bth)
+        Bluetooth(applicationContext)
     }
 
+    private val bthViewModel: BluetoothViewModel by lazy {
+        BluetoothViewModel(bth, permissionManager)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        permissionManager.requestPermission(Manifest.permission.BLUETOOTH, BluetoothAdapter.ACTION_REQUEST_ENABLE)
-        permissionManager.requestPermission(Manifest.permission.BLUETOOTH_SCAN, BluetoothAdapter.ACTION_DISCOVERY_STARTED)
+        if (Build.VERSION.SDK_INT >= 31) {
+            permissionManager.requestPermission(Manifest.permission.BLUETOOTH_CONNECT, BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        } else {
+            permissionManager.requestPermission(Manifest.permission.BLUETOOTH, BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        }
 
         // Register for broadcasts when a device is discovered.
         val foundFilter = IntentFilter(BluetoothDevice.ACTION_FOUND)
         val enableFilter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
         val discoveryStartFilter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
         val discoveryFinishFilter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-
+//
         registerReceiver(foundReceiver, foundFilter)
         registerReceiver(bthStateUpdateReceiver, enableFilter)
         registerReceiver(bthDiscoveryStartReceiver, discoveryStartFilter)
@@ -63,24 +64,31 @@ class MainActivity : ComponentActivity() {
 
     // Create a BroadcastReceiver for ACTION_FOUND.
     private val foundReceiver = object : BroadcastReceiver() {
-        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action!!) {
+            when (intent.action) {
                 BluetoothDevice.ACTION_FOUND -> {
-                    // Discovery has found a device. Get the BluetoothDevice
-                    // object and its info from the Intent.
-                    val device: BluetoothDevice =
-                        intent.getParcelableExtra(
-                            BluetoothDevice.EXTRA_DEVICE,
-                            BluetoothDevice::class.java
-                        )!!
+                    val device: BluetoothDevice? = when (Build.VERSION.SDK_INT) {
+                        33 -> {
+                            permissionManager.requestPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        }
+                        else -> {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        }
+                    }
+
                     try {
-                        val deviceName = device.name
-                        val deviceHardwareAddress = device.address // MAC address
-                        bthViewModel.addAvailableDevice(Device(deviceName, deviceHardwareAddress))
-                        Log.i("FOUND: ", "$deviceName | $deviceHardwareAddress")
+                        if (device == null) {
+                            bthViewModel.addAvailableDevice(Device("null device", "null MAC"))
+                            Log.i("FOUND: ", "null device | null MAC")
+                        } else {
+                            val deviceName = device.name ?: "name not provided"
+                            val deviceHardwareAddress = device.address
+                            Log.i("FOUND: ", "$deviceName | $deviceHardwareAddress")
+                            bthViewModel.addAvailableDevice(Device(deviceName, deviceHardwareAddress))
+                        }
                     } catch (e: SecurityException) {
-                        Log.i("EXECPTION: ", "device.name persmission to not granted")
+                        Log.i("EXCEPTION: ", "device.name permission to not granted")
                     }
                 }
             }
@@ -115,11 +123,9 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action!!) {
                 BluetoothAdapter.ACTION_DISCOVERY_STARTED -> {
-                    Log.i("SZUKAM", "SZUKAM GO NOOO")
+                    Log.i("SCAN", "start")
                     bthViewModel.updateIsSearching(true)
-                }
-                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                    bthViewModel.updateIsSearching(false)
+                    bthViewModel.clearAvailableDevices()
                 }
             }
         }
@@ -129,6 +135,7 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action!!) {
                 BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                    Log.i("SCAN", "end")
                     bthViewModel.updateIsSearching(false)
                 }
             }
@@ -137,13 +144,11 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
 
-        // Don't forget to unregister the ACTION_FOUND receiver.
         unregisterReceiver(foundReceiver)
         unregisterReceiver(bthStateUpdateReceiver)
         unregisterReceiver(bthDiscoveryStartReceiver)
         unregisterReceiver(bthDiscoveryFinishReceiver)
     }
-
 }
 
 @Composable
@@ -164,7 +169,7 @@ fun BluetoothStatus(isOn: Boolean) {
 fun DeviceCard(device: Device) {
     var isExpanded by remember { mutableStateOf(false) }
     Column(modifier = Modifier
-        .padding(30.dp, 15.dp)
+        .padding(20.dp, 15.dp)
         .clickable { isExpanded = !isExpanded }) {
         Text(text = device.name, color = MaterialTheme.colors.secondary)
         if (isExpanded) Text(
@@ -184,13 +189,12 @@ fun PairedDevices(devices: List<Device>) {
     }
 }
 @Composable
-fun AvailableDevices(devices: List<Device>) {
-    Row {
-        Text(text = "AvailableDevices")
-        LazyColumn {
-            items(devices) { device ->
-                DeviceCard(device)
-            }
+//fun AvailableDevices(devices: List<Device>) {
+fun AvailableDevices(devices: Set<Device>) {
+    Text("AvailableDevices")
+    LazyColumn {
+        items(devices.toList()) { device ->
+            DeviceCard(device)
         }
     }
 }
@@ -205,14 +209,19 @@ fun InitialScreen(bluetoothViewModel: BluetoothViewModel) {
                 Column {
                     BluetoothSupport(bluetoothUiState.isBluetoothSupported)
                     BluetoothStatus(bluetoothUiState.isBluetoothEnabled)
-                    Button(onClick = { bluetoothViewModel.searchForDevices() }) {
-                        Text(if (!bluetoothUiState.isSearching) "Search for devices" else "Searching...")
+                    Button(onClick = {
+                        if (bluetoothUiState.isSearching) {
+                            bluetoothViewModel.cancelSearch()
+                        } else {
+                            bluetoothViewModel.searchForDevices()
+                        }
+                    }) {
+                        Text(if (bluetoothUiState.isSearching) "Searching..." else "Search for devices")
                     }
                     AvailableDevices(bluetoothUiState.availableDevices)
                 }
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
                 ) {
                     PairedDevices(bluetoothUiState.pairedDevices)
                 }

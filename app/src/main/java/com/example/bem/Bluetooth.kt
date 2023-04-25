@@ -3,10 +3,11 @@ package com.example.bem
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat.getSystemService
 
-class Bluetooth(ctx: Context, val permissionManager: PermissionManager) {
+class Bluetooth(ctx: Context) {
     private val bluetoothManager = getSystemService(ctx, BluetoothManager::class.java)
 
     private val bluetoothAdapter = bluetoothManager?.adapter
@@ -20,14 +21,19 @@ class Bluetooth(ctx: Context, val permissionManager: PermissionManager) {
     fun searchForDevices() {
         try {
             if (bluetoothAdapter == null) {
-                Log.i("NIE MA", "nie ma adaptera")
-            } else {
-                Log.i("JEST", "jest adapter")
-
+                Log.i("ASDASDA: ","start discovery, no DISCOVERY permission")
             }
             bluetoothAdapter?.startDiscovery()
         } catch (e: SecurityException) {
-            Log.i("EXCEPTION: ","no DISCOVERY permission")
+            Log.i("EXCEPTION: ","start discovery, no DISCOVERY permission")
+        }
+    }
+
+    fun cancelSearch() {
+        try {
+            bluetoothAdapter?.cancelDiscovery()
+        } catch (e: SecurityException) {
+            Log.i("EXCEPTION: ","cancel discovery, no DISCOVERY permission")
         }
     }
     fun getPairedDevices(): List<Device> {
