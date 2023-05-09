@@ -1,32 +1,38 @@
 package com.example.bem
 
 import android.Manifest
-import android.bluetooth.BluetoothAdapter
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.util.*
 
 data class Device(val name: String, val MAC: String)
 
 data class BluetoothUiState(
     var isBluetoothEnabled: Boolean = false,
     var isBluetoothSupported: Boolean = false,
-    var pairedDevices: List<Device> = emptyList(),
+//    var pairedDevices: List<Device> = emptyList(),
+    var pairedDevices: List<Device> = listOf(
+        Device("default device 1", "default MAC 1"),
+        Device("default device 2", "default MAC 2")
+    ),
 //    var availableDevices: List<Device> = emptyList(),
-    var availableDevices: Set<Device> = emptySet(),
+    var availableDevices: Set<Device> = setOf(Device("available device 1", "available MAC 1")),
+//    var availableDevices: Set<Device> = emptySet(),
     var isSearching: Boolean = false,
 )
 
-class BluetoothViewModel(private val bth: Bluetooth, private val permissionManager: PermissionManager): ViewModel() {
+class BluetoothViewModel(
+    private val bth: Bluetooth,
+    private val permissionManager: PermissionManager
+) : ViewModel() {
     private val _uiState = MutableStateFlow(
         BluetoothUiState(
             isBluetoothEnabled = bth.isBluetoothEnabled,
             isBluetoothSupported = bth.isBluetoothSupported,
-            pairedDevices = bth.getPairedDevices(),
+//            pairedDevices = bth.getPairedDevices(),
         )
     )
 

@@ -2,30 +2,41 @@ package com.example.bem
 
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothServerSocket
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat.getSystemService
+import java.util.UUID
+
+val BLUETOOTH_BEM_SERVICE_UUID = UUID.fromString("BEM")
 
 class Bluetooth(ctx: Context) {
     private val bluetoothManager = getSystemService(ctx, BluetoothManager::class.java)
-
     private val bluetoothAdapter = bluetoothManager?.adapter
 
+    private var serverSocket: BluetoothServerSocket? = null
     val isBluetoothSupported: Boolean
         get() = bluetoothAdapter != null
 
     val isBluetoothEnabled: Boolean
         get() = bluetoothAdapter?.isEnabled == true
 
+    fun listen() {
+        try {
+            serverSocket = bluetoothAdapter?.listenUsingInsecureRfcommWithServiceRecord(
+                "BEM",
+                BLUETOOTH_BEM_SERVICE_UUID
+            )
+        } catch (e: SecurityException) {
+            Log.i("EXCEPTION: ", "missing BLUETOOTH_CONNECT permission")
+        }
+    }
+
     fun searchForDevices() {
         try {
-            if (bluetoothAdapter == null) {
-                Log.i("ASDASDA: ","start discovery, no DISCOVERY permission")
-            }
             bluetoothAdapter?.startDiscovery()
         } catch (e: SecurityException) {
-            Log.i("EXCEPTION: ","start discovery, no DISCOVERY permission")
+            Log.i("EXCEPTION: ", "start discovery, no DISCOVERY permission")
         }
     }
 
@@ -33,9 +44,10 @@ class Bluetooth(ctx: Context) {
         try {
             bluetoothAdapter?.cancelDiscovery()
         } catch (e: SecurityException) {
-            Log.i("EXCEPTION: ","cancel discovery, no DISCOVERY permission")
+            Log.i("EXCEPTION: ", "cancel discovery, no DISCOVERY permission")
         }
     }
+
     fun getPairedDevices(): List<Device> {
         try {
             val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter?.bondedDevices
@@ -52,7 +64,7 @@ class Bluetooth(ctx: Context) {
             return mappedDevices
 
         } catch (e: SecurityException) {
-            Log.i("EXCEPTION: ","no CONNECT permission")
+            Log.i("EXCEPTION: ", "no CONNECT permission")
 
             return listOf(Device("exception device", "exception MAC"))
         }
