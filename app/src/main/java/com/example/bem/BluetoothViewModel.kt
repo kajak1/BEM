@@ -3,10 +3,13 @@ package com.example.bem
 import android.Manifest
 import android.os.Build
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class Device(val name: String, val MAC: String)
 
@@ -22,6 +25,7 @@ data class BluetoothUiState(
     var availableDevices: Set<Device> = setOf(Device("available device 1", "available MAC 1")),
 //    var availableDevices: Set<Device> = emptySet(),
     var isSearching: Boolean = false,
+    var isDiscoverable: Boolean = false
 )
 
 class BluetoothViewModel(
@@ -38,6 +42,14 @@ class BluetoothViewModel(
 
     val uiState: StateFlow<BluetoothUiState> = _uiState.asStateFlow()
 
+    fun updateIsDiscoverable(isDiscoverable: Boolean) {
+        _uiState.update { currentState ->
+            currentState.copy(
+                isDiscoverable = isDiscoverable
+            )
+        }
+    }
+
     fun updateBluetoothEnabled(isEnabled: Boolean) {
         _uiState.update { currentState ->
             currentState.copy(
@@ -52,6 +64,15 @@ class BluetoothViewModel(
                 isSearching = newIsSearching
             )
         }
+    }
+
+    fun listen() {
+        val scope = CoroutineScope(Dispatchers.Default)
+        scope.launch { bth.listen() }
+    }
+
+    fun stopListening() {
+        bth.stopListening()
     }
 
     fun searchForDevices() {
@@ -99,5 +120,10 @@ class BluetoothViewModel(
                 pairedDevices = bth.getPairedDevices()
             )
         }
+    }
+
+    fun connect(MAC: String) {
+        val scope = CoroutineScope(Dispatchers.Default)
+//        scope.launch { bth.connect() }
     }
 }

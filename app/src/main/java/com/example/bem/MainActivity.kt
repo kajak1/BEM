@@ -12,11 +12,12 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.bem.ui.theme.BEMTheme
@@ -47,7 +49,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val bth: Bluetooth by lazy {
-        Bluetooth(applicationContext)
+        Bluetooth(applicationContext, this)
     }
 
     private val bthViewModel: BluetoothViewModel by lazy {
@@ -74,11 +76,13 @@ class MainActivity : ComponentActivity() {
         val enableFilter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
         val discoveryStartFilter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
         val discoveryFinishFilter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        val discoveryScanModeFilter = IntentFilter(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
 
         registerReceiver(foundReceiver, foundFilter)
         registerReceiver(bthStateUpdateReceiver, enableFilter)
         registerReceiver(bthDiscoveryStartReceiver, discoveryStartFilter)
         registerReceiver(bthDiscoveryFinishReceiver, discoveryFinishFilter)
+        registerReceiver(bthDiscoveryScanModeReceiver, discoveryScanModeFilter)
 
         setContent {
             InitialScreen(bthViewModel)
@@ -175,6 +179,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val bthDiscoveryScanModeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action!!) {
+                BluetoothAdapter.ACTION_SCAN_MODE_CHANGED -> {
+
+                    val state =
+                        intent.getIntExtra(BluetoothAdapter.EXTRA_SCAN_MODE, BluetoothAdapter.ERROR)
+
+                    when (state) {
+                        BluetoothAdapter.SCAN_MODE_CONNECTABLE -> {
+                            Log.i(
+                                "BTH",
+                                "SCAN_MODE_CONNECTABLE - cant discover, can receive connection"
+                            )
+                            bthViewModel.updateIsDiscoverable(false)
+                        }
+
+                        BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE -> {
+                            Log.i("BTH", "SCAN_MODE_CONNECTABLE_DISCOVERABLE")
+                            bthViewModel.updateIsDiscoverable(true)
+
+                        }
+
+                        BluetoothAdapter.SCAN_MODE_NONE -> {
+                            Log.i("BTH", "SCAN_MODE_NONE")
+                            bthViewModel.updateIsDiscoverable(false)
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
 
@@ -182,6 +220,7 @@ class MainActivity : ComponentActivity() {
         unregisterReceiver(bthStateUpdateReceiver)
         unregisterReceiver(bthDiscoveryStartReceiver)
         unregisterReceiver(bthDiscoveryFinishReceiver)
+        unregisterReceiver(bthDiscoveryScanModeReceiver)
     }
 }
 
@@ -200,22 +239,27 @@ fun BluetoothStatus(isOn: Boolean) {
 }
 
 @Composable
-fun DeviceCard(device: Device, content: (@Composable () -> Unit)? = null) {
+fun DeviceCard(
+    device: Device,
+    content: (@Composable () -> Unit)? = null,
+//    viewModel: BluetoothViewModel = viewModel()
+) {
     var isExpanded by remember { mutableStateOf(false) }
     var isConnecting by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 55.dp, minWidth = 400.dp)
             .padding(0.dp, 5.dp)
+            .defaultMinSize(minHeight = 48.dp)
+            .border(1.dp, Color.Green)
     ) {
         Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .fillMaxHeight()
+                .border(1.dp, Color.Red)
         ) {
             Surface(modifier = Modifier
                 .pointerInput(Unit) {
@@ -226,7 +270,9 @@ fun DeviceCard(device: Device, content: (@Composable () -> Unit)? = null) {
                         onTap = { isConnecting = !isConnecting }
                     )
                 }
-                .weight(1f)) {
+                .weight(1f)
+                .border(1.dp, Color.Blue)
+            ) {
                 Text(
                     text = device.name,
                     color = if (isConnecting) MaterialTheme.colors.secondary else MaterialTheme.colors.primary
@@ -241,10 +287,17 @@ fun DeviceCard(device: Device, content: (@Composable () -> Unit)? = null) {
         }
 
         if (isExpanded) {
-            Text(
-                text = device.MAC,
-                color = MaterialTheme.colors.primary,
-            )
+            Row {
+                Text(
+                    text = device.MAC,
+                    color = MaterialTheme.colors.primary,
+                )
+
+                Button(onClick = { /* TODO add connect functionality - bth.connect() */ }) {
+                    Text("connect")
+                }
+            }
+
         }
 
     }
@@ -255,10 +308,6 @@ fun DevicesList(devices: List<Device>, deviceFn: (@Composable (device: Device) -
     LazyColumn {
         items(devices) { device ->
             deviceFn?.let { deviceFn(device) }
-
-//            if (deviceFn != null) {
-//                deviceFn(device)
-//            }
         }
     }
 }
@@ -293,8 +342,8 @@ fun InitialScreen(bluetoothViewModel: BluetoothViewModel) {
                     BluetoothStatus(bluetoothUiState.isBluetoothEnabled)
                 }
 
-                Button(onClick = { /*TODO*/ }) {
-                    Text("Pair new device")
+                Button(onClick = { if (bluetoothUiState.isDiscoverable) bluetoothViewModel.stopListening() else bluetoothViewModel.listen() }) {
+                    Text(if (bluetoothUiState.isDiscoverable) "waiting" else "Make device discoverable")
                 }
 
                 PairedDevices(bluetoothUiState.pairedDevices)
@@ -309,6 +358,7 @@ fun InitialScreen(bluetoothViewModel: BluetoothViewModel) {
                     }) {
                         Text(if (bluetoothUiState.isSearching) "Searching..." else "Search for devices")
                     }
+
                     AvailableDevices(bluetoothUiState.availableDevices)
                 }
             }
