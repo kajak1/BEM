@@ -1,1 +1,1 @@
-Mesh network based communicator utilizing Bluetooth technology
+Communicator based on a mesh network utilizing Bluetooth technology
